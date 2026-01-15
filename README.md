@@ -1,19 +1,76 @@
-# Year Calendar Wallpaper for macOS
+# Progress - Year Calendar Wallpaper Generator
 
-An automated macOS wallpaper system that displays a visual year calendar with dots representing weeks, automatically updating daily to show your progress through the year.
-
-![Example](year_calendar_wallpaper.png)
+Beautiful year calendar wallpapers for macOS showing your progress through the year.
 
 ## Features
 
-- ✨ **Modern design** with gradient backgrounds and premium aesthetics
+- ✨ **Modern design** with clean aesthetics
 - 🎯 **Multiple display modes**: Day (365 dots), Week (52 dots), or Month (12 dots)
-- 🎨 **Minimalist & clean** design that everyone will love
+- 🎨 **Fully customizable** colors and appearance
 - 📊 **Visual progress tracking** with color-coded past/current/future periods
-- 💫 **Glow effects** highlighting current period
-- 🔄 **Automatic daily updates** at midnight
+- 🔄 **Automatic daily updates** via LaunchAgent
 - 🖥️ **5K resolution** (5120×2880) optimized for macOS Retina displays
-- 🎨 **Fully customizable** colors, modes, and update schedule
+
+## Installation
+
+### From source
+
+```bash
+git clone https://github.com/madanlalit/progress.git
+cd progress
+pip install -e .
+```
+
+## Usage
+
+### Generate Wallpaper
+
+```bash
+# Week mode (default)
+progress generate
+
+# Day mode with 365 dots
+progress generate --mode day
+
+# Month mode
+progress generate --mode month
+
+# Custom output location
+progress generate --output ~/Desktop/calendar.png
+
+# Custom colors
+progress generate --bg-color "#1a1a1c" --current-color "#ff7350"
+```
+
+### Enable Daily Auto-Updates
+
+```bash
+# Install LaunchAgent for daily updates at midnight
+progress install
+
+# Uninstall
+progress uninstall
+```
+
+### Command-Line Options
+
+```
+usage: progress [-h] [--version] {generate,install,uninstall} ...
+
+Commands:
+  generate    Generate wallpaper
+  install     Install daily auto-update
+  uninstall   Uninstall daily auto-update
+
+Generate options:
+  --mode {day,week,month}   Display mode (default: week)
+  --output PATH             Output file path
+  --bg-color HEX           Background color (e.g., "#1a1a1c")
+  --past-color HEX         Past periods color
+  --current-color HEX      Current period color
+  --dot-size INT           Override dot size
+  --no-set                 Generate only, don't set as wallpaper
+```
 
 ## Display Modes
 
@@ -26,136 +83,45 @@ An automated macOS wallpaper system that displays a visual year calendar with do
 ### Month Mode
 12 large dots representing each month - for a cleaner, simpler view.
 
-**Visual Design:**
-- **Past periods**: Subtle gray dots
-- **Current period**: Bright coral dot with glow effect
-- **Future periods**: Semi-transparent white dots  
-- **Display**: Year, current date, progress info, and completion percentage
-
-## Installation
-
-### 1. Install Dependencies
-
-The script requires Pillow (PIL). If you have `uv` installed:
-
-```bash
-uv pip install Pillow
-```
-
-### 2. Test Manual Generation
-
-Generate the wallpaper manually to verify it works:
-
-```bash
-uv run year_calendar.py
-```
-
-This creates `year_calendar_wallpaper.png` in the current directory.
-
-### 3. Test Wallpaper Setting
-
-Run the setter script to apply the wallpaper:
-
-```bash
-./set_wallpaper.sh
-```
-
-Your desktop wallpaper should update immediately!
-
-### 4. Enable Automatic Daily Updates
-
-Copy the LaunchAgent to your user's LaunchAgents directory:
-
-```bash
-cp com.yearcalendar.daily.plist ~/Library/LaunchAgents/
-```
-
-Load the LaunchAgent:
-
-```bash
-launchctl load ~/Library/LaunchAgents/com.yearcalendar.daily.plist
-```
-
-The wallpaper will now automatically update every day at 12:01 AM.
-
 ## Customization
 
-### Display Modes
-
-Change the `MODE` variable at the top of `year_calendar.py` to switch between visualizations:
-
-```python
-MODE = 'week'   # Options: 'day', 'week', or 'month'
-```
-
-- **`'day'`** - 365 dots showing every single day of the year (5 rows)
-- **`'week'`** - 52 dots showing each week (1 row) - **Default**
-- **`'month'`** - 12 dots showing each month (1 row)
-
-### Color & Style Customization
-
-Edit `year_calendar.py` configuration section to customize:
-
-**Colors** (lines 13-20):
-- `BG_START` / `BG_END` - Gradient background colors
-- `PAST` - Color for completed periods
-- `CURRENT` - Highlight color for current period (default: coral)
-- `ACCENT` - Accent color for date text (default: purple)
-- `TEXT_PRIMARY` / `TEXT_SECONDARY` - Text colors
-
-**Appearance** (automatically adjusted per mode):
-- `W, H` - Resolution (line 12)
-- Mode-specific: `dot_size`, `gap`, `dots_per_row` (lines 30-57)
-
-**Schedule** (change update time):
-- Edit `com.yearcalendar.daily.plist` lines 18-22 to change the daily update time
-
-## Uninstallation
-
-To stop automatic updates:
-
-```bash
-launchctl unload ~/Library/LaunchAgents/com.yearcalendar.daily.plist
-rm ~/Library/LaunchAgents/com.yearcalendar.daily.plist
-```
-
-## Troubleshooting
-
-### Wallpaper not updating automatically
-
-Check the logs:
-
-```bash
-cat wallpaper_update.log
-cat launchd.log
-cat launchd.error.log
-```
-
-### Manual trigger for testing
-
-```bash
-launchctl start com.yearcalendar.daily
-```
-
-### Verify LaunchAgent is loaded
-
-```bash
-launchctl list | grep yearcalendar
-```
-
-## Files
-
-- `year_calendar.py` - Wallpaper generator script
-- `set_wallpaper.sh` - Automation script that generates and sets wallpaper
-- `com.yearcalendar.daily.plist` - LaunchAgent configuration for daily updates
-- `year_calendar_wallpaper.png` - Generated wallpaper (created automatically)
+All display modes feature:
+- **Past periods**: Subtle gray dots
+- **Current period**: Bright coral dot
+- **Future periods**: Semi-transparent white dots  
+- **Display**: Year, current date, progress info, and completion percentage
 
 ## Requirements
 
 - macOS
-- Python 3.7+
-- Pillow library
-- `uv` (recommended) or `pip`
+- Python >=3.8
+- Pillow >=9.0.0
+
+## Development
+
+```bash
+# Clone repository
+git clone https://github.com/madanlalit/progress.git
+cd progress
+
+# Install in development mode
+pip install -e .
+
+# Run locally
+python -m progress.cli generate
+```
+
+## License
+
+MIT License - see LICENSE file for details
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Author
+
+Created by [Lalit Madan](https://github.com/madanlalit)
 
 ---
 
