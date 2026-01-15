@@ -1,13 +1,20 @@
-"""Core wallpaper generation logic."""
+"""
+Core wallpaper generation logic - Perfect Grid Edition.
+"""
 
-from PIL import Image, ImageDraw, ImageFont
+import os
+import urllib.request
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import datetime
+import math
 from typing import Tuple, Optional
-from .config import DEFAULT_CONFIG, MODE_CONFIG, DEFAULT_WIDTH, DEFAULT_HEIGHT
+from pathlib import Path
+
+from .config import DEFAULT_CONFIG, MODE_CONFIG, FONTS, DEFAULT_WIDTH, DEFAULT_HEIGHT
 
 
 class WallpaperGenerator:
-    """Generates year calendar wallpapers showing progress through the year."""
+    """Generates ultra-minimal year calendar wallpapers."""
 
     def __init__(
         self,
@@ -20,49 +27,42 @@ class WallpaperGenerator:
         future_color: Optional[Tuple[int, int, int, int]] = None,
         dot_size: Optional[int] = None,
     ):
-        """
-        Initialize the wallpaper generator.
-
-        Args:
-            mode: Display mode ('day', 'week', or 'month')
-            width: Image width in pixels
-            height: Image height in pixels
-            bg_color: Background RGB color
-            past_color: Past periods RGB color
-            current_color: Current period RGB color
-            future_color: Future periods RGBA color
-            dot_size: Override dot size for the mode
-        """
+        """Initialize the wallpaper generator."""
         self.mode = mode
-        self.width = width
-        self.height = height
+        self.scale_factor = 4
+        self.target_width = width
+        self.target_height = height
+        self.width = width * self.scale_factor
+        self.height = height * self.scale_factor
 
-        # Use custom colors or defaults
+        # Colors
         self.bg_color = bg_color or DEFAULT_CONFIG["bg"]
         self.past_color = past_color or DEFAULT_CONFIG["past"]
         self.current_color = current_color or DEFAULT_CONFIG["current"]
         self.future_color = future_color or DEFAULT_CONFIG["future"]
+        # The color for dots that exist just to fill the grid square
+        self.void_color = DEFAULT_CONFIG.get("void", (25, 25, 25))
+
         self.text_primary = DEFAULT_CONFIG["text_primary"]
         self.text_secondary = DEFAULT_CONFIG["text_secondary"]
         self.text_accent = DEFAULT_CONFIG["text_accent"]
 
-        # Get mode configuration
         if mode not in MODE_CONFIG:
-            raise ValueError(f"Invalid mode: {mode}. Must be 'day', 'week', or 'month'")
+            raise ValueError(f"Invalid mode: {mode}")
 
         mode_cfg = MODE_CONFIG[mode]
         self.dots_per_row = mode_cfg["dots_per_row"]
-        self.dot_size = dot_size or mode_cfg["dot_size"]
-        self.gap = mode_cfg["gap"]
 
-        # Calculate date information
+        base_size = dot_size or mode_cfg["dot_size"]
+        self.dot_size = base_size * self.scale_factor
+        self.gap = mode_cfg["gap"] * self.scale_factor
+
         self.today = datetime.date.today()
         self.year = self.today.year
         self.day_of_year = self.today.timetuple().tm_yday
         self.current_week = self.today.isocalendar().week
         self.current_month = self.today.month
 
-        # Mode-specific totals and current position
         if mode == "day":
             self.total = 365
             self.current = self.day_of_year
@@ -71,158 +71,184 @@ class WallpaperGenerator:
             self.total = 52
             self.current = self.current_week
             self.label = "Week"
-        else:  # month
+        else:
             self.total = 12
             self.current = self.current_month
             self.label = "Month"
 
-    def _load_fonts(self):
-        """Load fonts with fallbacks."""
-        try:
-            title_font = ImageFont.truetype(
-                "/System/Library/Fonts/Supplemental/Arial.ttf", 220
-            )
-            large_font = ImageFont.truetype(
-                "/System/Library/Fonts/Supplemental/Arial.ttf", 90
-            )
-            medium_font = ImageFont.truetype(
-                "/System/Library/Fonts/Supplemental/Arial.ttf", 52
-            )
-            small_font = ImageFont.truetype(
-                "/System/Library/Fonts/Supplemental/Arial.ttf", 42
-            )
-        except OSError:
-            try:
-                title_font = ImageFont.truetype(
-                    "/System/Library/Fonts/SFNSDisplay.ttf", 220
-                )
-                large_font = ImageFont.truetype(
-                    "/System/Library/Fonts/SFNSDisplay.ttf", 90
-                )
-                medium_font = ImageFont.truetype(
-                    "/System/Library/Fonts/SFNSDisplay.ttf", 52
-                )
-                small_font = ImageFont.truetype(
-                    "/System/Library/Fonts/SFNSDisplay.ttf", 42
-                )
-            except OSError:
-                try:
-                    title_font = ImageFont.truetype(
-                        "/System/Library/Fonts/Helvetica.ttc", 220
-                    )
-                    large_font = ImageFont.truetype(
-                        "/System/Library/Fonts/Helvetica.ttc", 90
-                    )
-                    medium_font = ImageFont.truetype(
-                        "/System/Library/Fonts/Helvetica.ttc", 52
-                    )
-                    small_font = ImageFont.truetype(
-                        "/System/Library/Fonts/Helvetica.ttc", 42
-                    )
-                except OSError:
-                    title_font = ImageFont.load_default()
-                    large_font = ImageFont.load_default()
-                    medium_font = ImageFont.load_default()
-                    small_font = ImageFont.load_default()
+    def _get_font(self, font_key: str, size: int) -> ImageFont.ImageFont:
+        font_dir = Path.home() / ".progress" / "fonts"
+        font_dir.mkdir(parents=True, exist_ok=True)
+        font_info = FONTS[font_key]
+        font_path = font_dir / font_info["filename"]
 
-        return title_font, large_font, medium_font, small_font
+        if not font_path.exists():
+            print(f"⬇️  Downloading {font_info['filename']}...")
+            try:
+                urllib.request.urlretrieve(font_info["url"], font_path)
+            except Exception:
+                return ImageFont.load_default()
+
+        try:
+            return ImageFont.truetype(str(font_path), size * self.scale_factor)
+        except OSError:
+            return ImageFont.load_default()
+
+    def _draw_vignette(self, img: Image.Image) -> None:
+        gradient = Image.new("L", (self.width, self.height), 0)
+        draw = ImageDraw.Draw(gradient)
+        cx, cy = self.width // 2, self.height // 2
+        max_radius = int(math.sqrt(cx**2 + cy**2))
+
+        step = max(1, max_radius // 150)
+        for r in range(max_radius, 0, -step):
+            alpha = int(255 * (1 - (r / max_radius) ** 1.5))
+            alpha = 255 - alpha
+            draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=alpha)
+
+        overlay = Image.new("RGB", (self.width, self.height), (0, 0, 0))
+        mask = gradient.point(lambda p: p * 0.5)
+        img.paste(overlay, (0, 0), mask)
+
+    def _add_noise(self, img: Image.Image) -> Image.Image:
+        width, height = img.size
+        noise = Image.effect_noise((width, height), 25)
+        noise = noise.convert("RGBA")
+        img = img.convert("RGBA")
+        noise.putalpha(15)
+        return Image.alpha_composite(img, noise).convert("RGB")
+
+    def _create_bloom(self, x: int, y: int, size: int, color: Tuple) -> Image.Image:
+        pad = size * 6
+        glow_img = Image.new("RGBA", (pad * 2, pad * 2), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(glow_img)
+        draw.ellipse((pad - size, pad - size, pad + size, pad + size), fill=color)
+        blur_radius = size * 1.5
+        return glow_img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
 
     def generate(self, output_path: str = "progress_wallpaper.png") -> str:
-        """
-        Generate the wallpaper and save to file.
-
-        Args:
-            output_path: Path where the wallpaper will be saved
-
-        Returns:
-            The output path
-        """
-        # Create image
         img = Image.new("RGB", (self.width, self.height), self.bg_color)
+        self._draw_vignette(img)
         draw = ImageDraw.Draw(img, "RGBA")
 
-        # Load fonts
-        title_font, large_font, medium_font, small_font = self._load_fonts()
+        title_font = self._get_font("hero", 260)
+        date_font = self._get_font("data", 90)
+        info_font = self._get_font("data", 45)
 
-        # Calculate grid layout
-        rows = (self.total + self.dots_per_row - 1) // self.dots_per_row
-        grid_w = self.dots_per_row * self.gap
-        grid_h = rows * self.gap
-
-        start_x = (self.width - grid_w) // 2
-        start_y = (self.height // 2) + 100
-
-        # Draw text elements
-        # Year
+        # --- TEXT MEASUREMENT ---
         year_text = str(self.year)
         year_bbox = draw.textbbox((0, 0), year_text, font=title_font)
         year_w = year_bbox[2] - year_bbox[0]
-        year_x = (self.width - year_w) // 2
-        year_y = 350
-        draw.text((year_x, year_y), year_text, fill=self.text_primary, font=title_font)
+        year_h = year_bbox[3] - year_bbox[1]
 
-        # Current date
-        date_text = self.today.strftime("%B %d")
-        date_bbox = draw.textbbox((0, 0), date_text, font=large_font)
+        date_text = self.today.strftime("%B %d").upper()
+        date_bbox = draw.textbbox((0, 0), date_text, font=date_font)
         date_w = date_bbox[2] - date_bbox[0]
-        date_x = (self.width - date_w) // 2
-        date_y = year_y + 280
-        draw.text((date_x, date_y), date_text, fill=self.text_accent, font=large_font)
+        date_h = date_bbox[3] - date_bbox[1]
 
-        # Progress info
-        progress_text = f"{self.label} {self.current} of {self.total}"
-        progress_bbox = draw.textbbox((0, 0), progress_text, font=medium_font)
-        progress_w = progress_bbox[2] - progress_bbox[0]
-        progress_x = (self.width - progress_w) // 2
-        progress_y = start_y - 150
-        draw.text(
-            (progress_x, progress_y),
-            progress_text,
-            fill=self.text_secondary,
-            font=medium_font,
+        progress_pct = (self.current / self.total) * 100
+        bottom_text = f"{self.label.upper()} {self.current} / {self.total}   //   {progress_pct:.1f}%"
+        bottom_bbox = draw.textbbox((0, 0), bottom_text, font=info_font)
+        bottom_w = bottom_bbox[2] - bottom_bbox[0]
+        bottom_h = bottom_bbox[3] - bottom_bbox[1]
+
+        # --- GRID CALCULATION (PERFECT RECTANGLE LOGIC) ---
+        # 1. Calculate how many rows we need for the actual data
+        rows = (self.total + self.dots_per_row - 1) // self.dots_per_row
+
+        # 2. To make equal dots, we must draw the full rectangle
+        # Total slots = rows * columns
+        total_slots_in_grid = rows * self.dots_per_row
+
+        grid_width = (self.dots_per_row - 1) * self.gap + (self.dot_size * 2)
+        grid_height = (rows - 1) * self.gap + (self.dot_size * 2)
+
+        # --- SPACING ---
+        s = self.scale_factor
+        # INCREASED GAP HERE:
+        year_date_gap = 120 * s  # Increased from 50 to 120
+        header_gap = 200 * s
+        footer_gap = 160 * s
+
+        total_content_height = (
+            year_h
+            + year_date_gap
+            + date_h
+            + header_gap
+            + grid_height
+            + footer_gap
+            + bottom_h
         )
+        start_y = (self.height - total_content_height) // 2
 
-        # Draw dots
-        for i in range(1, self.total + 1):
+        # --- POSITIONING ---
+        year_x = (self.width - year_w) // 2
+        year_y = start_y
+
+        date_x = (self.width - date_w) // 2
+        date_y = year_y + year_h + year_date_gap
+
+        grid_start_x = (self.width - grid_width) // 2 + self.dot_size
+        grid_start_y = date_y + date_h + header_gap + self.dot_size
+
+        bottom_x = (self.width - bottom_w) // 2
+        bottom_y = grid_start_y + grid_height - self.dot_size + footer_gap
+
+        # --- DRAW TEXT ---
+        draw.text((year_x, year_y), year_text, fill=self.text_primary, font=title_font)
+        draw.text((date_x, date_y), date_text, fill=self.text_accent, font=date_font)
+
+        # --- DRAW DOTS ---
+        bloom_layer = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+
+        # Loop through the FULL GRID (total_slots_in_grid) to ensure a perfect rectangle
+        for i in range(1, total_slots_in_grid + 1):
             row = (i - 1) // self.dots_per_row
             col = (i - 1) % self.dots_per_row
 
-            x = start_x + col * self.gap
-            y = start_y + row * self.gap
-
-            # Determine color
-            if i < self.current:
-                color = self.past_color
-            elif i == self.current:
-                color = self.current_color
-            else:
-                color = self.future_color
-
-            draw.ellipse(
-                (
-                    x - self.dot_size,
-                    y - self.dot_size,
-                    x + self.dot_size,
-                    y + self.dot_size,
-                ),
-                fill=color,
+            cx = grid_start_x + col * self.gap
+            cy = grid_start_y + row * self.gap
+            bbox = (
+                cx - self.dot_size,
+                cy - self.dot_size,
+                cx + self.dot_size,
+                cy + self.dot_size,
             )
 
-        # Progress percentage at bottom
-        progress_pct = (self.current / self.total) * 100
-        percentage_text = f"{progress_pct:.1f}% complete"
-        percentage_bbox = draw.textbbox((0, 0), percentage_text, font=small_font)
-        percentage_w = percentage_bbox[2] - percentage_bbox[0]
-        percentage_x = (self.width - percentage_w) // 2
-        percentage_y = start_y + grid_h + 160
+            if i <= self.total:
+                # Actual Calendar Days
+                if i < self.current:
+                    draw.ellipse(bbox, fill=self.past_color)
+                elif i == self.current:
+                    bloom = self._create_bloom(
+                        int(cx), int(cy), self.dot_size, self.current_color
+                    )
+                    bw, bh = bloom.size
+                    bloom_layer.paste(
+                        bloom, (int(cx - bw / 2), int(cy - bh / 2)), bloom
+                    )
+                    draw.ellipse(bbox, fill=self.current_color)
+                else:
+                    draw.ellipse(bbox, fill=self.future_color)
+            else:
+                # "Ghost Dots" (Fillers to make the grid rectangular)
+                # We draw them using the 'void' color so they are barely visible
+                # but maintain the structure
+                draw.ellipse(bbox, fill=self.void_color)
+
+        img = Image.alpha_composite(img.convert("RGBA"), bloom_layer)
+
+        draw = ImageDraw.Draw(img)
         draw.text(
-            (percentage_x, percentage_y),
-            percentage_text,
-            fill=self.text_secondary,
-            font=small_font,
+            (bottom_x, bottom_y), bottom_text, fill=self.text_secondary, font=info_font
         )
 
-        # Save
-        img.save(output_path, quality=95, optimize=True)
+        img = self._add_noise(img)
+        final_img = img.resize(
+            (self.target_width, self.target_height), resample=Image.Resampling.LANCZOS
+        )
+
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        final_img.save(output_path, quality=100, optimize=True)
 
         return output_path

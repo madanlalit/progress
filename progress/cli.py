@@ -165,7 +165,29 @@ def generate_command(args):
 
 def install_command(args):
     """Handle the install command."""
-    return 0 if install_launchagent() else 1
+    if not install_launchagent():
+        return 1
+
+    # Generate initial wallpaper immediately
+    print("\n✨ Generating initial wallpaper...")
+    try:
+        # Default to week mode for initial run
+        generator = WallpaperGenerator(mode="day")
+
+        # Use the standard path
+        output_dir = Path.home() / ".progress"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(output_dir / "wallpaper.png")
+
+        # Generate and set
+        generator.generate(output_path)
+        if set_wallpaper_macos(output_path):
+            print(f"✓ Initial wallpaper set successfully")
+
+    except Exception as e:
+        print(f"⚠ Could not generate initial wallpaper: {e}")
+
+    return 0
 
 
 def uninstall_command(args):

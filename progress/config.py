@@ -2,22 +2,42 @@
 
 # Default color palette
 DEFAULT_CONFIG = {
-    "bg": (18, 18, 20),  # Pure dark background
-    "past": (90, 90, 95),  # Subtle gray for past
-    "future": (255, 255, 255, 30),  # Very subtle white for future
-    "current": (255, 115, 80),  # Vibrant coral for current
-    "text_primary": (245, 245, 250),  # Almost white
-    "text_secondary": (140, 140, 150),  # Dimmed text
-    "text_accent": (255, 115, 80),  # Coral accent
+    "bg": (18, 18, 20),  # Deep Matte Black
+    "past": (50, 50, 55),  # Dark Grey
+    "future": (255, 255, 255, 15),  # Subtle White
+    "current": (255, 115, 80),  # Coral
+    "void": (25, 25, 28),  # NEW: Color for the empty dots to complete the grid
+    "text_primary": (255, 255, 255),
+    "text_secondary": (120, 120, 130),
+    "text_accent": (255, 115, 80),
 }
 
-# Resolution defaults
+# Font URLs
+FONTS = {
+    "hero": {
+        "url": "https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-ExtraBold.ttf",
+        "filename": "Montserrat-ExtraBold.ttf",
+    },
+    "data": {
+        "url": "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Bold.ttf",
+        "filename": "JetBrainsMono-Bold.ttf",
+    },
+}
+
 DEFAULT_WIDTH = 5120
 DEFAULT_HEIGHT = 2880
 
-# Mode-specific configuration
+# SPACIOUS / BOLD CONFIGURATION
 MODE_CONFIG = {
-    "day": {"dots_per_row": 73, "dot_size": 14, "gap": 24},
-    "week": {"dots_per_row": 52, "dot_size": 22, "gap": 55},
-    "month": {"dots_per_row": 12, "dot_size": 50, "gap": 140},
+    "day": {
+        "dots_per_row": 28,  # 28 cols x 12 rows = 336 slots (Perfect for 365 days)
+        "dot_size": 22,
+        "gap": 70,
+    },
+    "week": {
+        "dots_per_row": 13,  # 13 cols x 4 rows = 52 slots (Perfect square)
+        "dot_size": 45,
+        "gap": 130,
+    },
+    "month": {"dots_per_row": 6, "dot_size": 120, "gap": 280},
 }
