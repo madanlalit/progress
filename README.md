@@ -1,3 +1,5 @@
+![Progress Header](header.png)
+
 # Progress - Year Calendar Wallpaper Generator
 
 Beautiful year calendar wallpapers for macOS showing your progress through the year.
@@ -77,8 +79,10 @@ Generate options:
 ### Week Mode (Default)
 52 dots representing each week of the year in a single row.
 
-### Day Mode  
+### Day Mode
 365 dots representing every day of the year in 5 rows - perfect for daily tracking!
+
+![Day Mode Wallpaper](day_wallpaper.png)
 
 ### Month Mode
 12 large dots representing each month - for a cleaner, simpler view.
