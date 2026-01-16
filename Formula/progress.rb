@@ -4,7 +4,7 @@ class Progress < Formula
   desc "Beautiful year calendar wallpapers showing yearly progress"
   homepage "https://github.com/madanlalit/progress"
   url "https://github.com/madanlalit/progress/archive/v1.0.0.tar.gz"
-  sha256 "PLACEHOLDER_SHA256"  # Will be calculated after first release
+  sha256 "3782f582f7eca7dacd15ab8dc800f492eb1bc4593b1cbd6ef5b85fb731c12075"
   license "MIT"
 
   depends_on "python@3.11"
