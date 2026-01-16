@@ -1,4 +1,4 @@
-![Progress Header](header.png)
+![Progress Header](assets/header.png)
 
 # Progress - Year Calendar Wallpaper Generator
 
@@ -82,7 +82,7 @@ Generate options:
 ### Day Mode
 365 dots representing every day of the year in 5 rows - perfect for daily tracking!
 
-![Day Mode Wallpaper](day_wallpaper.png)
+![Day Mode Wallpaper](assets/day_wallpaper.png)
 
 ### Month Mode
 12 large dots representing each month - for a cleaner, simpler view.
