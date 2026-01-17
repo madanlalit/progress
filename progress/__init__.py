@@ -1,6 +1,6 @@
 """Progress - A beautiful macOS wallpaper showing your yearly progress."""
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __author__ = "Lalit Madan"
 __license__ = "MIT"
 __url__ = "https://github.com/madanlalit/progress"

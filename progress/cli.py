@@ -19,15 +19,11 @@ def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
 
 
 def set_wallpaper_macos(image_path: str) -> bool:
-    """Set wallpaper on macOS using AppleScript."""
+    """Set wallpaper on macOS using AppleScript via Finder."""
     abs_path = os.path.abspath(image_path)
-    script = f'''
-    tell application "System Events"
-        tell every desktop
-            set picture to "{abs_path}"
-        end tell
-    end tell
-    '''
+    script = (
+        f'tell application "Finder" to set desktop picture to POSIX file "{abs_path}"'
+    )
 
     try:
         subprocess.run(["osascript", "-e", script], check=True, capture_output=True)
