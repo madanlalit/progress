@@ -3,8 +3,8 @@ class Progress < Formula
 
   desc "Beautiful year calendar wallpapers showing yearly progress"
   homepage "https://github.com/madanlalit/progress"
-  url "https://github.com/madanlalit/progress/archive/v1.2.0.tar.gz"
-  sha256 "8cbe3de9eb0e76f362fd3d29a66db91eb0309830e322173d5fa0399c8de000e1"
+  url "https://github.com/madanlalit/progress/archive/v1.3.0.tar.gz"
+  sha256 "PLACEHOLDER_WILL_UPDATE_AFTER_RELEASE"
   license "MIT"
 
   depends_on "pillow"
