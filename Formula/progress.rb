@@ -41,6 +41,6 @@ class Progress < Formula
 
   test do
     system bin/"progress", "--version"
-    system bin/"progress", "generate", "--no-set", "--mode", "week"
+    system bin/"progress", "generate", "--no-set", "--mode", "day"
   end
 end

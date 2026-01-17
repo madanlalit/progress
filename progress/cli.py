@@ -203,8 +203,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  progress generate                                    # Generate week mode wallpaper
-  progress generate --mode day                         # Generate day mode (365 dots)
+  progress generate                                    # Generate day mode wallpaper (365 dots)
+  progress generate --mode week                        # Generate week mode (52 dots)
   progress generate --mode month --output ~/wall.png   # Month mode with custom path
   progress generate --bg-color "#1a1a1c"               # Custom background color
   progress install                                     # Install daily auto-update
@@ -224,8 +224,8 @@ Examples:
         "--mode",
         "-m",
         choices=["day", "week", "month"],
-        default="week",
-        help="Display mode (default: week)",
+        default="day",
+        help="Display mode (default: day)",
     )
     generate_parser.add_argument(
         "--output",
