@@ -1,7 +1,9 @@
 """Progress - A beautiful macOS wallpaper showing your yearly progress."""
 
-__version__ = "1.0.0"
-__author__ = "Progress Contributors"
+__version__ = "1.1.0"
+__author__ = "Lalit Madan"
+__license__ = "MIT"
+__url__ = "https://github.com/madanlalit/progress"
 
 from .generator import WallpaperGenerator, DEFAULT_CONFIG, MODE_CONFIG
 
