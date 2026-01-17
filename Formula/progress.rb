@@ -17,8 +17,8 @@ class Progress < Formula
   # Automatic daily update service
   service do
     run [opt_bin/"progress", "generate", "--output", "#{Dir.home}/.progress/wallpaper.png"]
-    run_type :interval
-    interval 43200 # Run every 12 hours
+    run_type :cron
+    cron "1 0 * * *" # Run daily at 00:01
     keep_alive false
     working_dir Dir.home
     log_path var/"log/progress.log"
@@ -35,7 +35,7 @@ class Progress < Formula
       To generate a wallpaper manually right now:
         progress generate
 
-      The wallpaper will be saved to ~/.progress/wallpaper.png
+      The wallpaper will update daily at 00:01 and be saved to ~/.progress/wallpaper.png
     EOS
   end
 
