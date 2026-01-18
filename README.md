@@ -65,7 +65,7 @@ Commands:
   uninstall   Uninstall daily auto-update
 
 Generate options:
-  --mode {day,week,month}   Display mode (default: week)
+  --mode {day,week,month}   Display mode (default: day)
   --output PATH             Output file path
   --bg-color HEX           Background color (e.g., "#1a1a1c")
   --past-color HEX         Past periods color

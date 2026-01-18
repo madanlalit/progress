@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "progress"
-version = "1.0.0"
+version = "1.3.1"
 description = "Beautiful year calendar wallpapers showing your yearly progress"
 readme = "README.md"
 requires-python = ">=3.8"
