@@ -8,14 +8,33 @@ import shutil
 from pathlib import Path
 from typing import Optional, Tuple
 
+from .config import THEMES, DEFAULT_THEME
 from . import __version__
 from .generator import WallpaperGenerator
 
 
+def parse_hex_color(hex_color: str) -> Tuple[int, ...]:
+    """Convert hex color to RGB/RGBA tuple."""
+    normalized = hex_color.strip().lstrip("#")
+
+    if len(normalized) == 3:
+        normalized = "".join(char * 2 for char in normalized)
+
+    if len(normalized) not in {6, 8}:
+        raise ValueError(f"Invalid color {hex_color}. Use #RRGGBB or #RRGGBBAA")
+
+    try:
+        values = tuple(int(normalized[i : i + 2], 16) for i in range(0, len(normalized), 2))
+    except ValueError as exc:
+        raise ValueError(f"Invalid color {hex_color}. Use hexadecimal values only") from exc
+
+    return values
+
+
 def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
-    hex_color = hex_color.lstrip("#")
-    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    parsed = parse_hex_color(hex_color)
+    return parsed[:3]
 
 
 def set_wallpaper_macos(image_path: str) -> bool:
@@ -119,18 +138,21 @@ def uninstall_launchagent() -> bool:
 
 def generate_command(args):
     """Handle the generate command."""
-    # Parse custom colors if provided
-    bg_color = hex_to_rgb(args.bg_color) if args.bg_color else None
-    past_color = hex_to_rgb(args.past_color) if args.past_color else None
-    current_color = hex_to_rgb(args.current_color) if args.current_color else None
-
-    # Create generator
     try:
+        # Parse custom colors if provided
+        bg_color = hex_to_rgb(args.bg_color) if args.bg_color else None
+        past_color = hex_to_rgb(args.past_color) if args.past_color else None
+        current_color = hex_to_rgb(args.current_color) if args.current_color else None
+        future_color = parse_hex_color(args.future_color) if args.future_color else None
+
+        # Create generator
         generator = WallpaperGenerator(
             mode=args.mode,
+            theme=args.theme,
             bg_color=bg_color,
             past_color=past_color,
             current_color=current_color,
+            future_color=future_color,
             dot_size=args.dot_size,
         )
 
@@ -140,6 +162,7 @@ def generate_command(args):
         progress_pct = (generator.current / generator.total) * 100
         print(f"✨ Wallpaper generated successfully!")
         print(f"   Mode: {args.mode.upper()}")
+        print(f"   Theme: {args.theme.upper()}")
         print(f"   {generator.label} {generator.current} of {generator.total}")
         print(f"   Progress: {progress_pct:.1f}%")
         print(f"   Output: {output_path}")
@@ -197,9 +220,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  progress generate                                    # Generate day mode wallpaper (365 dots)
-  progress generate --mode week                        # Generate week mode (52 dots)
-  progress generate --mode month --output ~/wall.png   # Month mode with custom path
+  progress generate                                    # Generate day mode (dark theme)
+  progress generate --mode week --theme light          # Week mode with light theme
+  progress generate --theme ocean                      # Ocean theme
+  progress generate --theme sunset                     # Sunset theme
+  progress generate --theme cream                      # Extra light background theme
   progress generate --bg-color "#1a1a1c"               # Custom background color
   progress install                                     # Install daily auto-update
   progress uninstall                                   # Remove auto-update
@@ -222,6 +247,12 @@ Examples:
         help="Display mode (default: day)",
     )
     generate_parser.add_argument(
+        "--theme",
+        choices=list(THEMES.keys()),
+        default=DEFAULT_THEME,
+        help=f"Color theme (default: {DEFAULT_THEME})",
+    )
+    generate_parser.add_argument(
         "--output",
         "-o",
         default="progress_wallpaper.png",
@@ -232,6 +263,10 @@ Examples:
     )
     generate_parser.add_argument("--past-color", help="Past periods color (hex)")
     generate_parser.add_argument("--current-color", help="Current period color (hex)")
+    generate_parser.add_argument(
+        "--future-color",
+        help="Future periods color (hex: #RRGGBB or #RRGGBBAA)",
+    )
     generate_parser.add_argument("--dot-size", type=int, help="Override dot size")
     generate_parser.add_argument(
         "--no-set", action="store_true", help="Generate only, don't set as wallpaper"

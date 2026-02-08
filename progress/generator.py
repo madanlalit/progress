@@ -10,21 +10,57 @@ import math
 from typing import Tuple, Optional
 from pathlib import Path
 
-from .config import DEFAULT_CONFIG, MODE_CONFIG, FONTS, DEFAULT_WIDTH, DEFAULT_HEIGHT
+from .config import (
+    THEMES,
+    DEFAULT_THEME,
+    MODE_CONFIG,
+    FONTS,
+    DEFAULT_WIDTH,
+    DEFAULT_HEIGHT,
+)
 
 
 class WallpaperGenerator:
     """Generates ultra-minimal year calendar wallpapers."""
 
+    @staticmethod
+    def _clamp_byte(value: int) -> int:
+        return max(0, min(255, int(value)))
+
+    @classmethod
+    def _as_rgba(
+        cls, color: Tuple[int, ...], fallback_alpha: int = 255
+    ) -> Tuple[int, int, int, int]:
+        if len(color) == 4:
+            r, g, b, a = color
+            return (
+                cls._clamp_byte(r),
+                cls._clamp_byte(g),
+                cls._clamp_byte(b),
+                cls._clamp_byte(a),
+            )
+
+        if len(color) == 3:
+            r, g, b = color
+            return (
+                cls._clamp_byte(r),
+                cls._clamp_byte(g),
+                cls._clamp_byte(b),
+                cls._clamp_byte(fallback_alpha),
+            )
+
+        raise ValueError("Color values must be RGB or RGBA tuples")
+
     def __init__(
         self,
         mode: str = "week",
+        theme: str = DEFAULT_THEME,
         width: int = DEFAULT_WIDTH,
         height: int = DEFAULT_HEIGHT,
         bg_color: Optional[Tuple[int, int, int]] = None,
         past_color: Optional[Tuple[int, int, int]] = None,
         current_color: Optional[Tuple[int, int, int]] = None,
-        future_color: Optional[Tuple[int, int, int, int]] = None,
+        future_color: Optional[Tuple[int, ...]] = None,
         dot_size: Optional[int] = None,
     ):
         """Initialize the wallpaper generator."""
@@ -35,17 +71,41 @@ class WallpaperGenerator:
         self.width = width * self.scale_factor
         self.height = height * self.scale_factor
 
-        # Colors
-        self.bg_color = bg_color or DEFAULT_CONFIG["bg"]
-        self.past_color = past_color or DEFAULT_CONFIG["past"]
-        self.current_color = current_color or DEFAULT_CONFIG["current"]
-        self.future_color = future_color or DEFAULT_CONFIG["future"]
-        # The color for dots that exist just to fill the grid square
-        self.void_color = DEFAULT_CONFIG.get("void", (25, 25, 25))
+        if theme not in THEMES:
+            raise ValueError(
+                f"Invalid theme: {theme}. Available: {', '.join(THEMES.keys())}"
+            )
 
-        self.text_primary = DEFAULT_CONFIG["text_primary"]
-        self.text_secondary = DEFAULT_CONFIG["text_secondary"]
-        self.text_accent = DEFAULT_CONFIG["text_accent"]
+        theme_cfg = THEMES[theme]
+
+        # Colors
+        self.bg_color = bg_color or theme_cfg["bg"]
+        self.past_color = past_color or theme_cfg["past"]
+        self.current_color = current_color or theme_cfg["current"]
+        future_fallback_alpha = theme_cfg.get("future_alpha", 24)
+        self.future_color = self._as_rgba(
+            future_color or theme_cfg["future"], fallback_alpha=future_fallback_alpha
+        )
+        # The color for dots that exist just to fill the grid square
+        self.void_color = theme_cfg.get("void", (25, 25, 25))
+
+        self.text_primary = theme_cfg["text_primary"]
+        self.text_secondary = theme_cfg["text_secondary"]
+        self.text_accent = theme_cfg["text_accent"]
+
+        if current_color is not None:
+            self.bloom_color = self._as_rgba(current_color, fallback_alpha=210)
+        else:
+            self.bloom_color = self._as_rgba(
+                theme_cfg.get("bloom", self.current_color), fallback_alpha=210
+            )
+        self.bloom_radius = float(theme_cfg.get("bloom_radius", 1.5))
+
+        self.vignette_color = theme_cfg.get("vignette_color", (0, 0, 0))
+        self.vignette_strength = max(0.0, min(1.0, theme_cfg.get("vignette_strength", 0.5)))
+
+        self.noise_amount = max(1, int(theme_cfg.get("noise_amount", 25)))
+        self.noise_alpha = self._clamp_byte(theme_cfg.get("noise_alpha", 15))
 
         if mode not in MODE_CONFIG:
             raise ValueError(f"Invalid mode: {mode}")
@@ -106,24 +166,27 @@ class WallpaperGenerator:
             alpha = 255 - alpha
             draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=alpha)
 
-        overlay = Image.new("RGB", (self.width, self.height), (0, 0, 0))
-        mask = gradient.point(lambda p: p * 0.5)
+        overlay = Image.new("RGB", (self.width, self.height), self.vignette_color)
+        mask = gradient.point(lambda p: int(p * self.vignette_strength))
         img.paste(overlay, (0, 0), mask)
 
     def _add_noise(self, img: Image.Image) -> Image.Image:
         width, height = img.size
-        noise = Image.effect_noise((width, height), 25)
+        noise = Image.effect_noise((width, height), self.noise_amount)
         noise = noise.convert("RGBA")
         img = img.convert("RGBA")
-        noise.putalpha(15)
+        noise.putalpha(self.noise_alpha)
         return Image.alpha_composite(img, noise).convert("RGB")
 
-    def _create_bloom(self, x: int, y: int, size: int, color: Tuple) -> Image.Image:
+    def _create_bloom(self, size: int, color: Tuple[int, ...]) -> Image.Image:
         pad = size * 6
         glow_img = Image.new("RGBA", (pad * 2, pad * 2), (0, 0, 0, 0))
         draw = ImageDraw.Draw(glow_img)
-        draw.ellipse((pad - size, pad - size, pad + size, pad + size), fill=color)
-        blur_radius = size * 1.5
+        draw.ellipse(
+            (pad - size, pad - size, pad + size, pad + size),
+            fill=self._as_rgba(color, fallback_alpha=210),
+        )
+        blur_radius = size * self.bloom_radius
         return glow_img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
 
     def generate(self, output_path: str = "progress_wallpaper.png") -> str:
@@ -220,9 +283,7 @@ class WallpaperGenerator:
                 if i < self.current:
                     draw.ellipse(bbox, fill=self.past_color)
                 elif i == self.current:
-                    bloom = self._create_bloom(
-                        int(cx), int(cy), self.dot_size, self.current_color
-                    )
+                    bloom = self._create_bloom(self.dot_size, self.bloom_color)
                     bw, bh = bloom.size
                     bloom_layer.paste(
                         bloom, (int(cx - bw / 2), int(cy - bh / 2)), bloom

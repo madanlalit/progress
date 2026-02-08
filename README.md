@@ -9,6 +9,7 @@ Beautiful year calendar wallpapers for macOS showing your progress through the y
 - ✨ **Modern design** with clean aesthetics
 - 🎯 **Multiple display modes**: Day (365 dots), Week (52 dots), or Month (12 dots)
 - 🎨 **Fully customizable** colors and appearance
+- 🌈 **Curated built-in themes**: dark, light, ocean, forest, sunset, mono, linen, pastel, bloom, candy, cream
 - 📊 **Visual progress tracking** with color-coded past/current/future periods
 - 🔄 **Automatic daily updates** via LaunchAgent
 - 🖥️ **5K resolution** (5120×2880) optimized for macOS Retina displays
@@ -37,11 +38,21 @@ progress generate --mode day
 # Month mode
 progress generate --mode month
 
+# Sunset theme
+progress generate --theme sunset
+
+# Extra light background themes
+progress generate --theme linen
+progress generate --theme cream
+
 # Custom output location
 progress generate --output ~/Desktop/calendar.png
 
 # Custom colors
 progress generate --bg-color "#1a1a1c" --current-color "#ff7350"
+
+# Custom future color opacity
+progress generate --theme ocean --future-color "#7AE5FF33"
 ```
 
 ### Enable Daily Auto-Updates
@@ -66,10 +77,12 @@ Commands:
 
 Generate options:
   --mode {day,week,month}   Display mode (default: day)
+  --theme THEME             Theme: dark/light/ocean/forest/sunset/mono/linen/pastel/bloom/candy/cream
   --output PATH             Output file path
   --bg-color HEX           Background color (e.g., "#1a1a1c")
   --past-color HEX         Past periods color
   --current-color HEX      Current period color
+  --future-color HEX       Future periods color (#RRGGBB or #RRGGBBAA)
   --dot-size INT           Override dot size
   --no-set                 Generate only, don't set as wallpaper
 ```
@@ -92,7 +105,9 @@ Generate options:
 All display modes feature:
 - **Past periods**: Subtle gray dots
 - **Current period**: Bright coral dot
-- **Future periods**: Semi-transparent white dots  
+- **Future periods**: Semi-transparent theme-matched dots
+- **Theme rendering**: Theme-aware vignette, glow, and texture controls
+- **Light theme variety**: Multiple bright palettes for daytime desktops
 - **Display**: Year, current date, progress info, and completion percentage
 
 ## Requirements

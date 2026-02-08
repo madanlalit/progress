@@ -5,6 +5,7 @@ __author__ = "Lalit Madan"
 __license__ = "MIT"
 __url__ = "https://github.com/madanlalit/progress"
 
-from .generator import WallpaperGenerator, DEFAULT_CONFIG, MODE_CONFIG
+from .config import DEFAULT_CONFIG, MODE_CONFIG
+from .generator import WallpaperGenerator
 
 __all__ = ["WallpaperGenerator", "DEFAULT_CONFIG", "MODE_CONFIG"]
