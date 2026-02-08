@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, Tuple
 
-from .config import THEMES, DEFAULT_THEME
+from .config import THEMES, DEFAULT_THEME, LAYOUT_CONFIG
 from . import __version__
 from .generator import WallpaperGenerator
 
@@ -149,6 +149,8 @@ def generate_command(args):
         generator = WallpaperGenerator(
             mode=args.mode,
             theme=args.theme,
+            layout=args.layout,
+            show_metadata=args.show_metadata,
             bg_color=bg_color,
             past_color=past_color,
             current_color=current_color,
@@ -162,6 +164,7 @@ def generate_command(args):
         progress_pct = (generator.current / generator.total) * 100
         print(f"✨ Wallpaper generated successfully!")
         print(f"   Mode: {args.mode.upper()}")
+        print(f"   Layout: {args.layout.upper()}")
         print(f"   Theme: {args.theme.upper()}")
         print(f"   {generator.label} {generator.current} of {generator.total}")
         print(f"   Progress: {progress_pct:.1f}%")
@@ -188,7 +191,7 @@ def install_command(args):
     # Generate initial wallpaper immediately
     print("\n✨ Generating initial wallpaper...")
     try:
-        # Default to week mode for initial run
+        # Default to day mode for initial run
         generator = WallpaperGenerator(mode="day")
 
         # Use the standard path
@@ -222,6 +225,9 @@ def main():
 Examples:
   progress generate                                    # Generate day mode (dark theme)
   progress generate --mode week --theme light          # Week mode with light theme
+  progress generate --layout split-left                # Split-left layout preset
+  progress generate --layout bottom-band               # Bottom-band layout preset
+  progress generate --show-metadata                    # Show metadata line
   progress generate --theme ocean                      # Ocean theme
   progress generate --theme sunset                     # Sunset theme
   progress generate --theme cream                      # Extra light background theme
@@ -253,6 +259,12 @@ Examples:
         help=f"Color theme (default: {DEFAULT_THEME})",
     )
     generate_parser.add_argument(
+        "--layout",
+        choices=list(LAYOUT_CONFIG.keys()),
+        default="centered",
+        help="Layout preset (default: centered)",
+    )
+    generate_parser.add_argument(
         "--output",
         "-o",
         default="progress_wallpaper.png",
@@ -268,6 +280,11 @@ Examples:
         help="Future periods color (hex: #RRGGBB or #RRGGBBAA)",
     )
     generate_parser.add_argument("--dot-size", type=int, help="Override dot size")
+    generate_parser.add_argument(
+        "--show-metadata",
+        action="store_true",
+        help="Show weekday/week/remaining metadata line",
+    )
     generate_parser.add_argument(
         "--no-set", action="store_true", help="Generate only, don't set as wallpaper"
     )

@@ -199,6 +199,54 @@ FONTS = {
 DEFAULT_WIDTH = 5120
 DEFAULT_HEIGHT = 2880
 
+# Shared safe frame for layout composition (normalized canvas space).
+LAYOUT_SAFE_FRAME = {
+    "x": 0.07,
+    "y": 0.08,
+    "w": 0.86,
+    "h": 0.84,
+}
+
+# Layout presets for arranging the same core components.
+LAYOUT_CONFIG = {
+    "centered": {
+        "year_date_gap": 120,
+        "header_gap": 200,
+        "footer_gap": 160,
+        "meta_gap": 70,
+    },
+    "split-left": {
+        "grid_ratio": 0.58,
+        "col_gap_ratio": 0.04,
+        "year_date_gap": 72,
+        "stack_gap": 56,
+        "meta_gap": 40,
+    },
+    "split-right": {
+        "grid_ratio": 0.58,
+        "col_gap_ratio": 0.04,
+        "year_date_gap": 72,
+        "stack_gap": 56,
+        "meta_gap": 40,
+    },
+    "bottom-band": {
+        "grid_center_y_ratio": 0.58,
+        "header_offset_ratio": 0.05,
+        "footer_padding_ratio": 0.02,
+        "year_date_gap": 90,
+        "meta_gap": 50,
+        "content_gap": 70,
+    },
+    "top-band": {
+        "grid_center_y_ratio": 0.32,
+        "below_grid_gap": 80,
+        "footer_padding_ratio": 0.02,
+        "year_date_gap": 90,
+        "meta_gap": 50,
+        "content_gap": 70,
+    },
+}
+
 # SPACIOUS / BOLD CONFIGURATION
 MODE_CONFIG = {
     "day": {

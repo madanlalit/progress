@@ -2,21 +2,24 @@
 Core wallpaper generation logic - Perfect Grid Edition.
 """
 
-import os
-import urllib.request
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import datetime
 import math
-from typing import Tuple, Optional
+import os
+import urllib.request
 from pathlib import Path
+from typing import Dict, Optional, Tuple
+
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .config import (
-    THEMES,
-    DEFAULT_THEME,
-    MODE_CONFIG,
-    FONTS,
-    DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
+    DEFAULT_THEME,
+    DEFAULT_WIDTH,
+    FONTS,
+    LAYOUT_CONFIG,
+    LAYOUT_SAFE_FRAME,
+    MODE_CONFIG,
+    THEMES,
 )
 
 
@@ -51,12 +54,27 @@ class WallpaperGenerator:
 
         raise ValueError("Color values must be RGB or RGBA tuples")
 
+    @staticmethod
+    def _clamp(value: int, min_value: int, max_value: int) -> int:
+        if min_value > max_value:
+            return min_value
+        return max(min_value, min(max_value, int(value)))
+
+    @staticmethod
+    def _measure_text(
+        draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont
+    ) -> Tuple[int, int]:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return bbox[2] - bbox[0], bbox[3] - bbox[1]
+
     def __init__(
         self,
         mode: str = "week",
         theme: str = DEFAULT_THEME,
         width: int = DEFAULT_WIDTH,
         height: int = DEFAULT_HEIGHT,
+        layout: str = "centered",
+        show_metadata: bool = False,
         bg_color: Optional[Tuple[int, int, int]] = None,
         past_color: Optional[Tuple[int, int, int]] = None,
         current_color: Optional[Tuple[int, int, int]] = None,
@@ -74,6 +92,11 @@ class WallpaperGenerator:
         if theme not in THEMES:
             raise ValueError(
                 f"Invalid theme: {theme}. Available: {', '.join(THEMES.keys())}"
+            )
+
+        if layout not in LAYOUT_CONFIG:
+            raise ValueError(
+                f"Invalid layout: {layout}. Available: {', '.join(LAYOUT_CONFIG.keys())}"
             )
 
         theme_cfg = THEMES[theme]
@@ -102,7 +125,9 @@ class WallpaperGenerator:
         self.bloom_radius = float(theme_cfg.get("bloom_radius", 1.5))
 
         self.vignette_color = theme_cfg.get("vignette_color", (0, 0, 0))
-        self.vignette_strength = max(0.0, min(1.0, theme_cfg.get("vignette_strength", 0.5)))
+        self.vignette_strength = max(
+            0.0, min(1.0, theme_cfg.get("vignette_strength", 0.5))
+        )
 
         self.noise_amount = max(1, int(theme_cfg.get("noise_amount", 25)))
         self.noise_alpha = self._clamp_byte(theme_cfg.get("noise_alpha", 15))
@@ -111,6 +136,8 @@ class WallpaperGenerator:
             raise ValueError(f"Invalid mode: {mode}")
 
         mode_cfg = MODE_CONFIG[mode]
+        self.layout = layout
+        self.show_metadata = show_metadata
         self.dots_per_row = mode_cfg["dots_per_row"]
 
         base_size = dot_size or mode_cfg["dot_size"]
@@ -189,6 +216,263 @@ class WallpaperGenerator:
         blur_radius = size * self.bloom_radius
         return glow_img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
 
+    def _safe_frame(self) -> Tuple[int, int, int, int]:
+        safe_x = int(self.width * LAYOUT_SAFE_FRAME["x"])
+        safe_y = int(self.height * LAYOUT_SAFE_FRAME["y"])
+        safe_w = int(self.width * LAYOUT_SAFE_FRAME["w"])
+        safe_h = int(self.height * LAYOUT_SAFE_FRAME["h"])
+        return safe_x, safe_y, safe_w, safe_h
+
+    def _compute_grid_metrics(self) -> Dict[str, int]:
+        rows = (self.total + self.dots_per_row - 1) // self.dots_per_row
+        total_slots_in_grid = rows * self.dots_per_row
+        grid_width = (self.dots_per_row - 1) * self.gap + (self.dot_size * 2)
+        grid_height = (rows - 1) * self.gap + (self.dot_size * 2)
+        return {
+            "rows": rows,
+            "total_slots_in_grid": total_slots_in_grid,
+            "grid_width": grid_width,
+            "grid_height": grid_height,
+        }
+
+    def _build_metadata_text(self) -> str:
+        weekday = self.today.strftime("%A").upper()
+        iso_week = self.today.isocalendar().week
+        remaining = max(self.total - self.current, 0)
+        return (
+            f"{weekday}  //  ISO WK {iso_week:02d}  //  "
+            f"{remaining} {self.label.upper()} LEFT"
+        )
+
+    def _measure_text_blocks(
+        self,
+        draw: ImageDraw.ImageDraw,
+        year_text: str,
+        date_text: str,
+        bottom_text: str,
+        metadata_text: str,
+        title_font: ImageFont.ImageFont,
+        date_font: ImageFont.ImageFont,
+        info_font: ImageFont.ImageFont,
+        metadata_font: ImageFont.ImageFont,
+    ) -> Dict[str, int]:
+        year_w, year_h = self._measure_text(draw, year_text, title_font)
+        date_w, date_h = self._measure_text(draw, date_text, date_font)
+        bottom_w, bottom_h = self._measure_text(draw, bottom_text, info_font)
+        metadata_w, metadata_h = self._measure_text(draw, metadata_text, metadata_font)
+        return {
+            "year_w": year_w,
+            "year_h": year_h,
+            "date_w": date_w,
+            "date_h": date_h,
+            "bottom_w": bottom_w,
+            "bottom_h": bottom_h,
+            "metadata_w": metadata_w,
+            "metadata_h": metadata_h,
+        }
+
+    def _compute_positions(
+        self, layout_name: str, metrics: Dict[str, int], show_metadata: bool
+    ) -> Dict[str, Optional[int]]:
+        if layout_name not in LAYOUT_CONFIG:
+            raise ValueError(f"Invalid layout: {layout_name}")
+
+        cfg = LAYOUT_CONFIG[layout_name]
+        s = self.scale_factor
+
+        year_w = metrics["year_w"]
+        year_h = metrics["year_h"]
+        date_w = metrics["date_w"]
+        date_h = metrics["date_h"]
+        bottom_w = metrics["bottom_w"]
+        bottom_h = metrics["bottom_h"]
+        metadata_w = metrics["metadata_w"]
+        metadata_h = metrics["metadata_h"]
+        grid_width = metrics["grid_width"]
+        grid_height = metrics["grid_height"]
+
+        safe_x, safe_y, safe_w, safe_h = self._safe_frame()
+        safe_right = safe_x + safe_w
+        safe_bottom = safe_y + safe_h
+
+        metadata_x: Optional[int] = None
+        metadata_y: Optional[int] = None
+
+        if layout_name == "centered":
+            year_date_gap = cfg["year_date_gap"] * s
+            header_gap = cfg["header_gap"] * s
+            footer_gap = cfg["footer_gap"] * s
+            meta_gap = cfg["meta_gap"] * s
+
+            total_content_height = (
+                year_h
+                + year_date_gap
+                + date_h
+                + (meta_gap + metadata_h if show_metadata else 0)
+                + header_gap
+                + grid_height
+                + footer_gap
+                + bottom_h
+            )
+            start_y = (self.height - total_content_height) // 2
+
+            year_x = (self.width - year_w) // 2
+            year_y = start_y
+
+            date_x = (self.width - date_w) // 2
+            date_y = year_y + year_h + year_date_gap
+
+            if show_metadata:
+                metadata_x = (self.width - metadata_w) // 2
+                metadata_y = date_y + date_h + meta_gap
+                grid_top = metadata_y + metadata_h + header_gap
+            else:
+                grid_top = date_y + date_h + header_gap
+
+            grid_left = (self.width - grid_width) // 2
+            bottom_x = (self.width - bottom_w) // 2
+            bottom_y = grid_top + grid_height + footer_gap
+
+        elif layout_name in {"split-left", "split-right"}:
+            col_gap = int(self.width * cfg["col_gap_ratio"])
+            grid_col_w = int(safe_w * cfg["grid_ratio"])
+            text_col_w = safe_w - grid_col_w - col_gap
+
+            split_left = layout_name == "split-left"
+            if split_left:
+                text_col_x = safe_x
+                grid_col_x = safe_x + text_col_w + col_gap
+            else:
+                grid_col_x = safe_x
+                text_col_x = safe_x + grid_col_w + col_gap
+
+            grid_left = grid_col_x + (grid_col_w - grid_width) // 2
+            grid_top = safe_y + (safe_h - grid_height) // 2
+
+            year_date_gap = cfg["year_date_gap"] * s
+            stack_gap = cfg["stack_gap"] * s
+            meta_gap = cfg["meta_gap"] * s
+            total_text_h = (
+                year_h
+                + year_date_gap
+                + date_h
+                + (meta_gap + metadata_h if show_metadata else 0)
+                + stack_gap
+                + bottom_h
+            )
+            text_start_y = safe_y + (safe_h - total_text_h) // 2
+
+            year_x = text_col_x + (text_col_w - year_w) // 2
+            year_y = text_start_y
+
+            date_x = text_col_x + (text_col_w - date_w) // 2
+            date_y = year_y + year_h + year_date_gap
+
+            if show_metadata:
+                metadata_x = text_col_x + (text_col_w - metadata_w) // 2
+                metadata_y = date_y + date_h + meta_gap
+                bottom_y = metadata_y + metadata_h + stack_gap
+            else:
+                bottom_y = date_y + date_h + stack_gap
+
+            bottom_x = text_col_x + (text_col_w - bottom_w) // 2
+
+        elif layout_name == "bottom-band":
+            year_date_gap = cfg["year_date_gap"] * s
+            meta_gap = cfg["meta_gap"] * s
+            content_gap = cfg["content_gap"] * s
+            header_offset = int(safe_h * cfg["header_offset_ratio"])
+            footer_padding = int(safe_h * cfg["footer_padding_ratio"])
+
+            year_x = (self.width - year_w) // 2
+            year_y = safe_y + header_offset
+            date_x = (self.width - date_w) // 2
+            date_y = year_y + year_h + year_date_gap
+
+            if show_metadata:
+                metadata_x = (self.width - metadata_w) // 2
+                metadata_y = date_y + date_h + meta_gap
+                header_bottom = metadata_y + metadata_h
+            else:
+                header_bottom = date_y + date_h
+
+            bottom_x = (self.width - bottom_w) // 2
+            bottom_y = safe_bottom - bottom_h - footer_padding
+
+            grid_left = safe_x + (safe_w - grid_width) // 2
+            grid_top = int(self.height * cfg["grid_center_y_ratio"] - grid_height / 2)
+
+            min_grid_top = header_bottom + content_gap
+            max_grid_top = bottom_y - content_gap - grid_height
+            if max_grid_top >= min_grid_top:
+                grid_top = self._clamp(grid_top, min_grid_top, max_grid_top)
+            else:
+                grid_top = min_grid_top
+
+        elif layout_name == "top-band":
+            year_date_gap = cfg["year_date_gap"] * s
+            meta_gap = cfg["meta_gap"] * s
+            content_gap = cfg["content_gap"] * s
+            below_grid_gap = cfg["below_grid_gap"] * s
+            footer_padding = int(safe_h * cfg["footer_padding_ratio"])
+
+            grid_left = safe_x + (safe_w - grid_width) // 2
+            grid_top = int(self.height * cfg["grid_center_y_ratio"] - grid_height / 2)
+
+            bottom_x = (self.width - bottom_w) // 2
+            bottom_y = safe_bottom - bottom_h - footer_padding
+
+            block_h = year_h + year_date_gap + date_h + (
+                meta_gap + metadata_h if show_metadata else 0
+            )
+            min_year_y = grid_top + grid_height + below_grid_gap
+            max_year_y = bottom_y - content_gap - block_h
+            if max_year_y >= min_year_y:
+                year_y = min_year_y + (max_year_y - min_year_y) // 3
+            else:
+                year_y = min_year_y
+
+            year_x = (self.width - year_w) // 2
+            date_x = (self.width - date_w) // 2
+            date_y = year_y + year_h + year_date_gap
+
+            if show_metadata:
+                metadata_x = (self.width - metadata_w) // 2
+                metadata_y = date_y + date_h + meta_gap
+
+        else:
+            raise ValueError(f"Invalid layout: {layout_name}")
+
+        # Keep the grid inside safe frame when there is enough space.
+        if safe_w > grid_width:
+            grid_left = self._clamp(grid_left, safe_x, safe_right - grid_width)
+        if safe_h > grid_height:
+            grid_top = self._clamp(grid_top, safe_y, safe_bottom - grid_height)
+
+        grid_start_x = grid_left + self.dot_size
+        grid_start_y = grid_top + self.dot_size
+
+        return {
+            "year_x": year_x,
+            "year_y": year_y,
+            "date_x": date_x,
+            "date_y": date_y,
+            "metadata_x": metadata_x,
+            "metadata_y": metadata_y,
+            "bottom_x": bottom_x,
+            "bottom_y": bottom_y,
+            "grid_left": grid_left,
+            "grid_top": grid_top,
+            "grid_start_x": grid_start_x,
+            "grid_start_y": grid_start_y,
+            "grid_right": grid_left + grid_width,
+            "grid_bottom": grid_top + grid_height,
+            "safe_x": safe_x,
+            "safe_y": safe_y,
+            "safe_right": safe_right,
+            "safe_bottom": safe_bottom,
+        }
+
     def generate(self, output_path: str = "progress_wallpaper.png") -> str:
         img = Image.new("RGB", (self.width, self.height), self.bg_color)
         self._draw_vignette(img)
@@ -197,80 +481,67 @@ class WallpaperGenerator:
         title_font = self._get_font("hero", 260)
         date_font = self._get_font("data", 90)
         info_font = self._get_font("data", 45)
+        metadata_font = self._get_font("data", 32)
 
-        # --- TEXT MEASUREMENT ---
         year_text = str(self.year)
-        year_bbox = draw.textbbox((0, 0), year_text, font=title_font)
-        year_w = year_bbox[2] - year_bbox[0]
-        year_h = year_bbox[3] - year_bbox[1]
-
         date_text = self.today.strftime("%B %d").upper()
-        date_bbox = draw.textbbox((0, 0), date_text, font=date_font)
-        date_w = date_bbox[2] - date_bbox[0]
-        date_h = date_bbox[3] - date_bbox[1]
-
         progress_pct = (self.current / self.total) * 100
         bottom_text = f"{self.label.upper()} {self.current} / {self.total}   //   {progress_pct:.1f}%"
-        bottom_bbox = draw.textbbox((0, 0), bottom_text, font=info_font)
-        bottom_w = bottom_bbox[2] - bottom_bbox[0]
-        bottom_h = bottom_bbox[3] - bottom_bbox[1]
+        metadata_text = self._build_metadata_text()
 
-        # --- GRID CALCULATION (PERFECT RECTANGLE LOGIC) ---
-        # 1. Calculate how many rows we need for the actual data
-        rows = (self.total + self.dots_per_row - 1) // self.dots_per_row
-
-        # 2. To make equal dots, we must draw the full rectangle
-        # Total slots = rows * columns
-        total_slots_in_grid = rows * self.dots_per_row
-
-        grid_width = (self.dots_per_row - 1) * self.gap + (self.dot_size * 2)
-        grid_height = (rows - 1) * self.gap + (self.dot_size * 2)
-
-        # --- SPACING ---
-        s = self.scale_factor
-        # INCREASED GAP HERE:
-        year_date_gap = 120 * s  # Increased from 50 to 120
-        header_gap = 200 * s
-        footer_gap = 160 * s
-
-        total_content_height = (
-            year_h
-            + year_date_gap
-            + date_h
-            + header_gap
-            + grid_height
-            + footer_gap
-            + bottom_h
+        text_metrics = self._measure_text_blocks(
+            draw,
+            year_text,
+            date_text,
+            bottom_text,
+            metadata_text,
+            title_font,
+            date_font,
+            info_font,
+            metadata_font,
         )
-        start_y = (self.height - total_content_height) // 2
-
-        # --- POSITIONING ---
-        year_x = (self.width - year_w) // 2
-        year_y = start_y
-
-        date_x = (self.width - date_w) // 2
-        date_y = year_y + year_h + year_date_gap
-
-        grid_start_x = (self.width - grid_width) // 2 + self.dot_size
-        grid_start_y = date_y + date_h + header_gap + self.dot_size
-
-        bottom_x = (self.width - bottom_w) // 2
-        bottom_y = grid_start_y + grid_height - self.dot_size + footer_gap
+        grid_metrics = self._compute_grid_metrics()
+        layout_metrics = {**text_metrics, **grid_metrics}
+        positions = self._compute_positions(
+            self.layout, layout_metrics, self.show_metadata
+        )
 
         # --- DRAW TEXT ---
-        draw.text((year_x, year_y), year_text, fill=self.text_primary, font=title_font)
-        draw.text((date_x, date_y), date_text, fill=self.text_accent, font=date_font)
+        draw.text(
+            (positions["year_x"], positions["year_y"]),
+            year_text,
+            fill=self.text_primary,
+            font=title_font,
+        )
+        draw.text(
+            (positions["date_x"], positions["date_y"]),
+            date_text,
+            fill=self.text_accent,
+            font=date_font,
+        )
+        if (
+            self.show_metadata
+            and positions["metadata_x"] is not None
+            and positions["metadata_y"] is not None
+        ):
+            metadata_color = self._as_rgba(self.text_secondary, fallback_alpha=180)
+            draw.text(
+                (positions["metadata_x"], positions["metadata_y"]),
+                metadata_text,
+                fill=metadata_color,
+                font=metadata_font,
+            )
 
         # --- DRAW DOTS ---
         bloom_layer = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
 
-        # Loop through the FULL GRID (total_slots_in_grid) to ensure a perfect rectangle
-        for i in range(1, total_slots_in_grid + 1):
+        # Loop through the FULL GRID to ensure a perfect rectangle.
+        for i in range(1, grid_metrics["total_slots_in_grid"] + 1):
             row = (i - 1) // self.dots_per_row
             col = (i - 1) % self.dots_per_row
 
-            cx = grid_start_x + col * self.gap
-            cy = grid_start_y + row * self.gap
+            cx = positions["grid_start_x"] + col * self.gap
+            cy = positions["grid_start_y"] + row * self.gap
             bbox = (
                 cx - self.dot_size,
                 cy - self.dot_size,
@@ -279,7 +550,6 @@ class WallpaperGenerator:
             )
 
             if i <= self.total:
-                # Actual Calendar Days
                 if i < self.current:
                     draw.ellipse(bbox, fill=self.past_color)
                 elif i == self.current:
@@ -292,16 +562,16 @@ class WallpaperGenerator:
                 else:
                     draw.ellipse(bbox, fill=self.future_color)
             else:
-                # "Ghost Dots" (Fillers to make the grid rectangular)
-                # We draw them using the 'void' color so they are barely visible
-                # but maintain the structure
                 draw.ellipse(bbox, fill=self.void_color)
 
         img = Image.alpha_composite(img.convert("RGBA"), bloom_layer)
 
-        draw = ImageDraw.Draw(img)
+        draw = ImageDraw.Draw(img, "RGBA")
         draw.text(
-            (bottom_x, bottom_y), bottom_text, fill=self.text_secondary, font=info_font
+            (positions["bottom_x"], positions["bottom_y"]),
+            bottom_text,
+            fill=self.text_secondary,
+            font=info_font,
         )
 
         img = self._add_noise(img)
